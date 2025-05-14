@@ -56,3 +56,62 @@
     token-address: principal,
   }
 )
+
+(define-map UserPortfolios
+  principal
+  (list 20 uint)
+)
+
+;; Read-only Functions
+(define-read-only (get-portfolio (portfolio-id uint))
+  (map-get? Portfolios portfolio-id)
+)
+
+(define-read-only (get-portfolio-asset
+    (portfolio-id uint)
+    (token-id uint)
+  )
+  (map-get? PortfolioAssets {
+    portfolio-id: portfolio-id,
+    token-id: token-id,
+  })
+)
+
+(define-read-only (get-user-portfolios (user principal))
+  (default-to (list) (map-get? UserPortfolios user))
+)
+
+(define-read-only (calculate-rebalance-amounts (portfolio-id uint))
+  (let (
+      (portfolio (unwrap! (get-portfolio portfolio-id) ERR-INVALID-PORTFOLIO))
+      (total-value (get total-value portfolio))
+    )
+    (ok {
+      portfolio-id: portfolio-id,
+      total-value: total-value,
+      needs-rebalance: (> (- stacks-block-height (get last-rebalanced portfolio)) u144), ;; 24 hours in blocks
+    })
+  )
+)
+
+;; Private Functions
+(define-private (validate-token-id
+    (portfolio-id uint)
+    (token-id uint)
+  )
+  (let ((portfolio (unwrap! (get-portfolio portfolio-id) false)))
+    (and
+      (< token-id MAX-TOKENS-PER-PORTFOLIO)
+      (< token-id (get token-count portfolio))
+      true
+    )
+  )
+)
+
+(define-private (validate-percentage (percentage uint))
+  (and (>= percentage u0) (<= percentage BASIS-POINTS))
+)
+
+(define-private (validate-portfolio-percentages (percentages (list 10 uint)))
+  (fold check-percentage-sum percentages true)
+)
